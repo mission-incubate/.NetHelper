@@ -269,3 +269,189 @@ namespace Hl7.Helper
         }
     }
 }
+
+public class EnumHelper<T> where T : struct
+    {
+        public static IEnumerable<T> GetEnumMembers()
+        {
+            return Enum.GetValues(typeof(T)).Cast<T>();
+        }
+
+        public static T TryParse(string serverType)
+        {
+            T type;
+            Enum.TryParse<T>(serverType, out type);
+            return type;
+        }
+    }
+    
+    
+    public class XmlUtil
+    {
+        public static String Serizlize<T>(T Obj)
+        {
+            string outValue = string.Empty;
+            using (StringWriter writer = new StringWriter())
+            {
+                new XmlSerializer(typeof(T)).Serialize(writer, Obj);
+                outValue = writer.ToString();
+            }
+            return outValue;
+        }
+
+        public static String SerializeWithCDATA<T>(T Obj)
+        {
+            string outValue = string.Empty;
+            using (MemoryStream ms = new MemoryStream())
+            {
+                using (XmlWriter writer = XmlWriter.Create(ms, new XmlWriterSettings { OmitXmlDeclaration = true }))
+                {
+                    new XmlSerializer(typeof(T)).Serialize(writer, Obj);
+                    writer.Flush();
+                    writer.WriteCData(Encoding.UTF8.GetString(ms.ToArray()));
+                }
+            }
+            //XmlWriterSettings settings = new XmlWriterSettings();
+            //settings.OmitXmlDeclaration = true;
+            ////settings.Indent = true;
+            //StringBuilder sb = new StringBuilder();
+            //using (XmlWriter writer = XmlWriter.Create(sb, settings))
+            //{
+            //    new XmlSerializer(typeof(T)).Serialize(writer, Obj);
+            //    writer.WriteCData(sb.ToString());
+            //    outValue = writer.ToString();
+            //}
+            return outValue;
+        }
+
+        public static T Deserializer<T>(String Xml)
+        {
+            T outValue = default(T);
+            using (StringWriter writer = new StringWriter())
+            {
+                outValue = (T)new XmlSerializer(typeof(T)).Deserialize(new StringReader(Xml));
+            }
+            return outValue;
+        }
+        public static T DeserializerFromXMLFile<T>(string xmlFilePath)
+        {
+            //var xmlData = XDocument.Load(xmlFilePath).ToString();
+            var xmlData = File.ReadAllText(xmlFilePath);
+            return Deserializer<T>(xmlData);
+        }
+    }
+    
+    
+    public class Command<T> : ICommand
+    {
+        private Predicate<T> CanExecuteDelegate { get; set; }
+        private Action<T> ExecuteDelegate { get; set; }
+        public Command(Predicate<T> canExecute, Action<T> execute)
+        {
+            CanExecuteDelegate = canExecute;
+            ExecuteDelegate = execute;
+        }
+        #region ICommand Members
+        public bool CanExecute(object parameter)
+        {
+            var canExecute = true;
+            if (CanExecuteDelegate != null)
+            {
+                canExecute = CanExecuteDelegate((T)parameter);
+            }
+            return canExecute;
+        }
+        public event EventHandler CanExecuteChanged
+        {
+            add { CommandManager.RequerySuggested += value; }
+            remove { CommandManager.RequerySuggested -= value; }
+        }
+        public void Execute(object parameter)
+        {
+            if (ExecuteDelegate != null)
+            {
+                ExecuteDelegate((T)parameter);
+            }
+        }
+        #endregion
+    }
+    
+    
+    public class Reader
+    {
+        public static SqlDataReader ExecuteStoredProcedure(SqlConnection cn, string storedProcedureName, List<SqlParameter> Params = null)
+        {
+            SqlDataReader reader;
+            using (var cmd = new SqlCommand(storedProcedureName, cn))
+            {
+                if (Params != null)
+                {
+                    Params.ForEach(x => cmd.Parameters.Add(x));
+                }
+                cmd.CommandType = CommandType.StoredProcedure;
+                cn.Open();
+                reader = cmd.ExecuteReader();
+            }
+            return reader;
+        }
+
+        public static void ExecuteUpdateStoredProcedure(SqlConnection cn, string storedProcedureName, List<SqlParameter> Params)
+        {
+            using (var cmd = new SqlCommand(storedProcedureName, cn))
+            {
+                if (Params != null)
+                {
+                    Params.ForEach(x => cmd.Parameters.Add(x));
+                }
+                cmd.CommandType = CommandType.StoredProcedure;
+                cn.Open();
+                cmd.ExecuteNonQuery();
+            }
+        }
+    }
+
+    public class Reader<T> : Reader where T : class, new()
+    {
+        public new static List<T> ExecuteStoredProcedure(SqlConnection cn, string storedProcedureName, List<SqlParameter> Params = null)
+        {
+            List<T> list;
+            using (var cmd = new SqlCommand(storedProcedureName, cn))
+            {
+                if (Params != null)
+                {
+                    Params.ForEach(x => cmd.Parameters.Add(x));
+                }
+                cmd.CommandType = CommandType.StoredProcedure;
+                cn.Open();
+                using (SqlDataReader dr = cmd.ExecuteReader())
+                {
+                    list = GetItemsFromReader(dr);
+                }
+            }
+            return list;
+        }
+        public static List<T> GetItemsFromReader(SqlDataReader reader)
+        {
+            var objs = new List<T>();
+            if (reader.HasRows)
+            {
+                while (reader.Read())
+                {
+                    T obj = new T();
+                    var dic = typeof(T).GetProperties().ToDictionary(p => p.Name, p => p);
+                    for (var i = 0; i < reader.FieldCount; i++)
+                    {
+                        var name = reader.GetName(i);
+                        var value = reader[i];
+                        if (value is DBNull) continue;
+                        if (dic.ContainsKey(name) && !(dic[name].GetType() == typeof(List<>)))
+                        {
+                            dic[name].SetValue(obj, value, null);
+                        }
+                    }
+                    objs.Add(obj);
+                }
+            }
+            return objs;
+        }
+    }
