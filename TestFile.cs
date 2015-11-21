@@ -270,6 +270,27 @@ namespace Hl7.Helper
     }
 }
 
+public class EmbeddedResourceReader
+{
+		public static string ReadContentFromEmbeddedResource(Assembly assembly, string resourceName)
+		{
+			var result = string.Empty;
+			using (Stream stream = assembly.GetManifestResourceStream(resourceName))
+			using (StreamReader reader = new StreamReader(stream))
+			{
+				result = reader.ReadToEnd();
+			}
+			return result;
+		}
+
+		public static string GetResource()
+		{
+			var assembly = Assembly.GetExecutingAssembly();
+			var content = ReadContentFromEmbeddedResource(assembly, "DataExtraction.Query.xml");
+			return content;
+		}
+}
+
 public class EnumHelper<T> where T : struct
     {
         public static IEnumerable<T> GetEnumMembers()
