@@ -288,6 +288,25 @@ public class EnumHelper<T> where T : struct
     
     public class XmlUtil
     {
+         public static String Serizlize<T>(T obj, Encoding encoding = null, string prifix = "", string nameSpace = "")
+        {
+            string outValue;
+            encoding = encoding ?? Encoding.UTF8;
+            using (var ms = new MemoryStream())
+            using (var writer = new XmlTextWriter(ms, encoding))
+            //using (var writer = new StringWriter() )
+            {
+                var ns = new XmlSerializerNamespaces();
+                ns.Add(prifix, nameSpace);
+                new XmlSerializer(typeof(T)).Serialize(writer, obj, ns);
+                //outValue = writer.ToString();
+                writer.Flush();
+                ms.Seek(0, SeekOrigin.Begin);
+                var reader = new StreamReader(writer.BaseStream, encoding);
+                outValue = reader.ReadToEnd();
+            }
+            return outValue;
+        }
         public static String Serizlize<T>(T Obj)
         {
             string outValue = string.Empty;
@@ -298,7 +317,11 @@ public class EnumHelper<T> where T : struct
             }
             return outValue;
         }
-
+        public static void SerializeToFile<T>(T obj, string filepath, Encoding encoding = null, string prifix = "", string nameSpace = "")
+        {
+            var xml = Serizlize<T>(obj, encoding, prifix, nameSpace);
+            File.WriteAllText(filepath, xml);
+        }
         public static String SerializeWithCDATA<T>(T Obj)
         {
             string outValue = string.Empty;
